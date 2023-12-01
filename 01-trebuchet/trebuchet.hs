@@ -151,6 +151,6 @@ first f (a, c) = (f a, c)
 
 solve :: IO ()
 solve = do 
-  input <- readFile "01-trebuchet/input.txt"
+  input <- readFile "../input.txt"
   print $ getNumbers input
   print $ sum (getNumbers input)
