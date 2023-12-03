@@ -3,14 +3,7 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages:
-- completed:
-    hackage: text-replace-0.1.0.3@sha256:1ac3a6a18f0e7d5274e14b6e03e3b36b953d8f0a24ee6b43f8a8befb4160b6b6,1628
-    pantry-tree:
-      sha256: 9d2b3712b7223ab76c50f5e86bdca1431287896af9bd93abc54533a264da1de0
-      size: 394
-  original:
-    hackage: text-replace-0.1.0.3
+packages: []
 snapshots:
 - completed:
     sha256: afd5ba64ab602cabc2d3942d3d7e7dd6311bc626dcb415b901eaf576cb62f0ea
