@@ -14,7 +14,6 @@ data HandType = Five | Four | FullHouse | Three | TwoPair | Pair | HighCard deri
 
 part1 = sum . map (uncurry (*)) . zip [1..] . map snd . sortBy (\(h1, _) (h2, _) -> compare h2 h1) . parse
 
-
 readHand :: Hand -> HandType
 readHand (Hand xs) = case groupings of
   1 -> Five
@@ -29,10 +28,6 @@ readHand (Hand xs) = case groupings of
     four [x1, x2] = length x1 == 4 || length x2 == 4
     three [x1,x2,x3] = length x1 == 3 || length x2 == 3 || length x3 == 3
     
-
-allSame :: [Int] -> Bool
-allSame (x:xs) = foldl (\acc x'-> acc && x == x') True xs
-
 instance Ord Hand where
   compare h1@(Hand xs) h2@(Hand ys) 
     | readHand h1 < readHand h2 = LT
