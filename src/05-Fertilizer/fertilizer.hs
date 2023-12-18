@@ -1,66 +1,77 @@
-module Fertilizer () where
+module Fertilizer (main) where
 
-import Parser
-import Data.List (find, foldl',sort)
-import Control.Monad (join)
 import Control.Applicative
-import Data.Char (isSpace, isLetter)
-import Control.Parallel.Strategies
+import Control.Monad
+import Data.List
+import Data.Maybe
+import Debug.Trace
+import Parser
 
-main = solve
+main :: IO ()
+main = do
+  input <- readFile "input.txt"
+  print $ part1 input
+  print $ part2 input
 
-solve :: IO ()
-solve = do
-  ex <- readFile "05-Fertilizer/ex.txt"
-  input <- readFile "05-Fertilizer/input.txt"
-  print (part2 ex)
-  print (part2 input)
-
-data M = M Int Int Int deriving (Show)
-
-r :: Int -> Int -> (Int, Int)
-r a b = (a, a + b)
-
-intSpace :: Parser Int
-intSpace = parseInt <* satisfy (==' ')
-
-parseSeed :: Parser (Int, Int)
-parseSeed = r <$> (whitespace *> intSpace) <*> parseInt
-
-parseSeeds :: Parser [(Int,Int)]
-parseSeeds = parseString "seeds: " *> (many parseSeed) <* whitespace
-
-parseMaps :: Parser [M]
-parseMaps = title *> many (M <$> intSpace <*> intSpace <*> parseInt <* satisfy(=='\n'))
+part1 s = minimum $ map (\seed -> foldl applyTransform seed rs) seeds
   where
-    title = whitespace *> (many $ satisfy (\x -> isLetter x || x == '-')) *> parseString " map:\n" 
+    (Seeds seeds, fs) = parse s
+    rs = map convertToRanges fs
 
-parseAllMaps :: Parser [[M]]
-parseAllMaps = many parseMaps
-
-parse :: Parser a -> String -> (a, String)
-parse p i = case runParser p i of
-  Nothing -> error "Oh No"
-  Just x -> x
-
-f :: (Int, Int) -> [M] -> [(Int, Int)]
-f s [] = [s]
-f (s1, s2) (M d s l : ms)
-  | overlap = before <> mapped <> after
-  | otherwise = f (s1,s2) ms
+part2 s = sort $ map (\(Range a b) -> (a, b)) $ foldl (\seeds' (R r) -> applyTransform' seeds' r) seeds rs
   where
-    (m1,m2) = r s l
-    (d1,d2) = r d l
-    before = if s1 < m1 then f (s1, m1) ms else []
-    after = if s2 > m2 then f (m2, s2) ms else []
-    mapped = [(dstart, dend)]
-    dstart = d1 + max 0 (s1 - m1)
-    dend = if s2 < m2 then dstart + (s2 - s1) else d2
-    overlap = (s2 > m1 && s2 < m2) || (s1 < m2 && s1 > m1) || (m1 > s1 && m2 < s2)
+    (ss, fs) = parse s
+    seeds = seedToRanges ss
+    rs = map convertToRanges fs
 
--- for some reason the second lowest number is the correct answer
-part2 input = take 5 $ sort $ map fst $ foldl' (\seeds' m -> join $ map (\seed -> f seed m) seeds') seeds maps
+data Seeds = Seeds [Int] deriving (Show)
+
+data Func = F [(Int, Int, Int)] deriving (Show)
+
+data Range = Range Int Int deriving (Show)
+
+data R = R [(Range, Range)] deriving (Show)
+
+parseSeeds :: Parser Seeds
+parseSeeds = Seeds <$> (parseString "seeds:" *> whitespace *> (parseInt `sepBy` char ' '))
+
+int = whitespace *> parseInt
+
+parseMap :: Parser Func
+parseMap = F <$> (whitespace *> (many (satisfy (/= ':')) *> char ':' *> whitespace *> many ((,,) <$> int <*> int <*> int)))
+
+parse :: String -> (Seeds, [Func])
+parse = fst . fromJust . runParser ((,) <$> parseSeeds <*> many parseMap)
+
+convertToRanges :: Func -> R
+convertToRanges (F xs) = R $ map (\(to, from, l) -> (Range to $ to + l, Range from $ from + l)) xs
+
+seedToRanges :: Seeds -> [Range]
+seedToRanges (Seeds xs) = convert' xs
   where
-    (seeds, rest) = parse parseSeeds input
-    (maps, _) = parse parseAllMaps rest
-  
+    convert' [] = []
+    convert' [_] = error "ugh"
+    convert' (x1 : x2 : xs) = [Range x1 $ x1 + x2] <> convert' xs
+
+withinRange :: Int -> Range -> Bool
+withinRange n (Range s e) = n >= s && n < e
+
+applyTransform :: Int -> R -> Int
+applyTransform i (R xs) = go xs
+  where
+    go [] = i
+    go ((Range x1 _, from@(Range y1 _)) : ys)
+      | withinRange i from = i - y1 + x1
+      | otherwise = go ys
+
+applyTransform' :: [Range] -> [(Range, Range)] -> [Range]
+applyTransform' seeds rs = foldl (\acc s -> acc <> go s rs) [] seeds
+  where
+    go seed [] = pure seed
+    go (Range s1 s2) ((Range t1 _, Range r1 r2) : xs)
+      | s1 < r1 && s2 > r2 = go (Range s1 (r1 )) xs <> go (Range r2 s2) xs <> [f r1 r2 r1 t1]
+      | s1 < r1 && s2 < r2 && s2 > r1 = go (Range s1 (r1 )) xs <> [f r1 s2 r1 t1]
+      | s1 >= r1 && s2 < r2 && s2 > r1 = [f s1 s2 r1 t1]
+      | s1 < r2 && s2 > r2 && s1 >= r1 = go (Range r2 s2) xs <> [f s1 r2 r1 t1]
+      | otherwise = go (Range s1 s2) xs
+    f a b i t = Range (t + a - i) (t + b - i)

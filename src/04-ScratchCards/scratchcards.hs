@@ -1,71 +1,52 @@
-module Scratchcards () where
+module Scratchcards (main) where
 
-import Parser
-import Data.Char (isDigit, isSpace)
-import Data.List (lookup, foldl')
 import Control.Applicative
+import Data.List
+import qualified Data.Map as M
+import Data.Maybe
+import Debug.Trace
+import Parser
 
-parseNum :: Parser Int
-parseNum = read <$> some (satisfy isDigit)
+data Card = Card Int [Int] [Int] deriving (Show)
 
-whitespace :: Parser String
-whitespace = many (satisfy isSpace)
-
-parseString :: String -> Parser String
-parseString [x] = liftA2 (:) (satisfy (==x)) (pure [])
-parseString (x:xs) = liftA2 (:) (satisfy (==x)) (parseString xs)
-
-parseNumList :: Parser [Int]
-parseNumList = liftA2 (:) parseNum (many rest)
-  where
-    rest = whitespace *> parseNum
-
-parseLine :: Parser ([Int], [Int])
-parseLine = (\xs ys -> (xs, ys)) <$>
-  ((parseString "Card") *> whitespace *> parseNum *> satisfy(==':') *> whitespace *>
-  parseNumList <* whitespace) <*> (satisfy (=='|') *> whitespace *> parseNumList)
-
-countMatches :: ([Int], [Int]) -> Int
-countMatches (card, winning) = length $ filter (`elem` winning) card
-
-score :: ([Int], [Int]) -> Int
-score (card, winning) = f (length $ filter (`elem` winning) card)
-  where
-    f 0 = 0
-    f 1 = 1
-    f n = 2^(n - 1)
-
-lookup' :: Int -> [(Int, Int)] -> Int
-lookup' i xs = case lookup i xs of
-  Nothing -> 0
-  Just x -> x
-
-countCard :: [(Int, Int)] -> Int -> Int
-countCard cards i = 1 + (foldl' (\acc x -> acc + countCard' cards x) 0 [(i+1) .. (i+value)])
-  where
-    value = lookup' i cards
-    countCard' cards' i' = countCard cards' i'
-
-part1 :: String -> Int
-part1 input = sum scores 
-  where
-    scores = map (score) $ map (parse) (lines input)
-
-parse s = case runParser parseLine s of
-  Just (n, _) -> n
-  Nothing -> error s
-
-solve :: IO ()
-solve = do
-  ex <- readFile "04-ScratchCards/example.txt" 
-  input <- readFile "04-ScratchCards/input.txt"
-  print $ part1 ex
+main :: IO ()
+main = do
+  input <- readFile "input.txt"
   print $ part1 input
-  let c = zip [1..] $ map countMatches $ map parse (lines ex)
-  let c'= zip [1..] $ map countMatches $ map parse (lines input)
-  let cardmap = map (countCard c) [1..length c]
-  let cardmap' = map (countCard c') [1..length c']
-  print (sum cardmap)
-  print (zip [1..] cardmap')
-  print (sum cardmap')
-  -- print (foldl' (\acc x -> acc + countCard c' x) 0 [1..length c'])
+  print $ part2 input
+
+part1 = sum . map (\(Card _ win have) -> score $ length $ win `intersect` have) . parse
+
+part2 s = part2'
+  where
+    cards = parse s
+    scoreMap = M.fromList $ [(n, score' card) | card@(Card n _ _) <- cards]
+    part2' = sum $ map (scoreMap M.!) [1 .. length cards]
+    score' (Card n wins have) =
+      let win = length (wins `intersect` have)
+          more = [n + 1 .. n + win]
+       in sum (map score'' more) + 1
+    score'' n = scoreMap M.! n
+
+score 0 = 0
+score n = 2 ^ (n - 1)
+
+parse :: String -> [Card]
+parse = map parse' . lines
+  where
+    parse' = fst . fromJust . runParser parseLine
+
+ints = do
+  x <- parseInt
+  ( do
+      xs <- many (char ' ' *> parseInt <|> parseString "  " *> parseInt)
+      pure $ x : xs
+    )
+    <|> pure []
+
+parseLine :: Parser Card
+parseLine =
+  Card
+    <$> (parseString "Card" *> whitespace *> parseInt)
+    <*> (char ':' *> whitespace *> ints)
+    <*> (whitespace *> char '|' *> whitespace *> ints)
