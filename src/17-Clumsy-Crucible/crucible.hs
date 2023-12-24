@@ -8,7 +8,39 @@ import qualified Data.Array.Unboxed as A
 import qualified Data.List as L
 import Data.Maybe
 import qualified Data.Set as Set
-import Debug.Trace
+
+type Edges = A.UArray (Int, Int) Int
+
+data Lava = Lava {location :: (Int, Int), streak :: Int, prevD :: Direction} deriving (Eq, Ord, Show)
+
+data Direction = N | S | E | W | None deriving (Eq, Ord, Show)
+
+class PriorityQueue q where
+  extractMin :: (Ord a) => q a -> Maybe (a, q a)
+  (+++) :: (Ord a) => q a -> q a -> q a
+  singleton :: (Ord a) => a -> q a
+  insert :: (Ord a) => a -> q a -> q a
+  insert a q = singleton a +++ q
+  fromList :: (Ord a) => [a] -> q a
+  toList :: (Ord a) => q a -> [a]
+
+data SkewHeap a = Empty | SkewNode a (SkewHeap a) (SkewHeap a) deriving (Eq, Show)
+
+instance PriorityQueue SkewHeap where
+  extractMin Empty = Nothing
+  extractMin (SkewNode a l r) = Just (a, l +++ r)
+  Empty +++ q = q
+  q +++ Empty = q
+  q1@(SkewNode a1 l1 r1) +++ q2@(SkewNode a2 l2 r2)
+    | a1 <= a2 = SkewNode a1 (q2 +++ r1) l1
+    | otherwise = SkewNode a2 (q1 +++ r2) l2
+  singleton a = SkewNode a Empty Empty
+  toList Empty = []
+  toList q = maybe [] (\(a, q') -> a : toList q') (extractMin q)
+  fromList [] = Empty
+  fromList (x : xs) = insert x $ fromList xs
+
+data DijkstraState a = DS {node :: a, distance :: Int} deriving (Eq, Show)
 
 main :: IO ()
 main = do
@@ -73,44 +105,6 @@ right edges d point = case d of
 safeHead :: [a] -> Maybe a
 safeHead [] = Nothing
 safeHead (a : as) = Just a
-
-type Edges = A.UArray (Int, Int) Int
-
-data Lava = Lava {location :: (Int, Int), streak :: Int, prevD :: Direction} deriving (Eq, Ord, Show)
-
-data Direction = N | S | E | W | None deriving (Eq, Ord, Show)
-
-data A = A Int (Int, Int) [Direction] deriving (Eq, Show)
-
-instance Ord A where
-  compare (A n1 _ _) (A n2 _ _) = compare n1 n2
-
-class PriorityQueue q where
-  extractMin :: (Ord a) => q a -> Maybe (a, q a)
-  (+++) :: (Ord a) => q a -> q a -> q a
-  singleton :: (Ord a) => a -> q a
-  insert :: (Ord a) => a -> q a -> q a
-  insert a q = singleton a +++ q
-  fromList :: (Ord a) => [a] -> q a
-  toList :: (Ord a) => q a -> [a]
-
-data SkewHeap a = Empty | SkewNode a (SkewHeap a) (SkewHeap a) deriving (Eq, Show)
-
-instance PriorityQueue SkewHeap where
-  extractMin Empty = Nothing
-  extractMin (SkewNode a l r) = Just (a, l +++ r)
-  Empty +++ q = q
-  q +++ Empty = q
-  q1@(SkewNode a1 l1 r1) +++ q2@(SkewNode a2 l2 r2)
-    | a1 <= a2 = SkewNode a1 (q2 +++ r1) l1
-    | otherwise = SkewNode a2 (q1 +++ r2) l2
-  singleton a = SkewNode a Empty Empty
-  toList Empty = []
-  toList q = maybe [] (\(a, q') -> a : toList q') (extractMin q)
-  fromList [] = Empty
-  fromList (x : xs) = insert x $ fromList xs
-
-data DijkstraState a = DS {node :: a, distance :: Int} deriving (Eq, Show)
 
 -- not exactly dijkstra since we don't maintain a distance array but whatever
 dijkstra :: (Ord a, Ord r) => (a -> r) -> (a -> [DijkstraState a]) -> [a] -> [(a, Int)]
